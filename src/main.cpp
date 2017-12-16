@@ -12,6 +12,16 @@
 // for convenience
 using json = nlohmann::json;
 
+extern const int N;
+extern size_t px_start;
+extern size_t py_start;
+extern size_t psi_start;
+extern size_t v_start;
+extern size_t cte_start;
+extern size_t epsi_start;
+extern size_t delta_start;
+extern size_t a_start;
+
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
@@ -77,7 +87,7 @@ int main() {
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    //cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
@@ -91,6 +101,27 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          
+          Eigen::VectorXd roadside_x(ptsx.size());
+          Eigen::VectorXd roadside_y(ptsx.size());
+          double temp_x;
+          double temp_y;
+          // transform Descartes coordinates car space
+          for (size_t i = 0; i < ptsx.size(); i++) {
+            temp_x = ptsx[i] - px;
+            temp_y = ptsy[i] - py;
+            roadside_y[i] = (temp_y * cos(psi) - temp_x * sin(psi));
+            roadside_x[i] = (temp_y * sin(psi) + temp_x * cos(psi));
+            
+
+          }
+
+          auto coeffs = polyfit(roadside_x, roadside_y, 3);
+#ifdef DEBUG
+          std::cout<<"coeffs: "<<coeffs<<std::endl;
+#endif
+          auto cte = coeffs[0];
+          auto epsi = -atan(coeffs[1]);
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -98,18 +129,36 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
+          Eigen::VectorXd state(ptsx.size());
+          state<<0,0,0,v,cte,epsi;
+          
           double steer_value;
           double throttle_value;
+          
+          auto mpc_solve_val = mpc.Solve(state, coeffs);
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
+          steer_value = mpc_solve_val[delta_start];
+          throttle_value = mpc_solve_val[a_start];
+
+#ifdef DEBUG
+          std::cout<<"steer_value: "<<steer_value<<std::endl;
+          std::cout<<"throttle_value: "<<steer_value<<std::endl;
+#endif
+
+          msgJson["steering_angle"] = steer_value/deg2rad(25);
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
+
+          for(size_t i=0; i<N-1; i++) {
+              mpc_x_vals.push_back(mpc_solve_val[px_start + i + 1]);
+              mpc_y_vals.push_back(mpc_solve_val[py_start + i + 1]);
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -120,6 +169,13 @@ int main() {
           //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
+          
+          for (int i = 0; i < 20; i++) {
+              temp_x = i * 5.0;
+              temp_y = polyeval(coeffs, temp_x);
+              next_x_vals.push_back(temp_x);
+              next_y_vals.push_back(temp_y);
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
@@ -127,9 +183,8 @@ int main() {
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
-
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.
