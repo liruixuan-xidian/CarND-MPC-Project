@@ -2,6 +2,19 @@
 Self-Driving Car Engineer Nanodegree Program
 
 ---
+##The Model Introduction
+In this project, I use the module which is learned in the class, the state include position, velocity, steer angle, cross track error and orientation error. the control variable include angular velocity and acceleration. the control variable is used to compute the state of car in next state, and the state variable show the current state of car and also used to compute cte and epsi. The cte and epsi is important feature of cost function which could change the control variable to minimize the cost. As a resualt, make sure the car is not crash on the road. 
+###Lantency
+The controller variable include acceleration and angular velocity will only affect the state of car in next step, so I use the controller variable is in previes setp to coompute current state of the car.   
+##Turning parameters
+###timestep length and Elapsed duration
+The timestep value and elapsed duration deside the time we will predict in every step, if the time is too long, the car could make some unnecessary turning, for example, a curve is 100 meter away from the car, the car could alse turning even it is in a straight road, because the time we predict is two long. and if the time is too short, the car may turn frequently on the road like a drunk.
+###the weight of cost function
+The const function is consisted of cte, epsi, velocity and the controller variable, I think the epsi is very importent factor to keep the car on the middle of the road, so the weight of epsi is much high. and I also do not want the steer value changed quickly, so the also give a high weight to the angular velocity.
+##Polynomial Fitting
+Befor compute the coeffcient of polynomial, I transfered the waypoints to car space, so the initial state of position and steer angle is set to zero which could simplifier the computation. 
+
+
 
 ## Dependencies
 
